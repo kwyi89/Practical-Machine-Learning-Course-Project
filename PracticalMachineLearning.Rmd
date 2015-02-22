@@ -1,0 +1,94 @@
+---
+title: "Practical Machine Learning Project"
+author: "Kangsan Wyi"
+date: "Saturday, February 21, 2015"
+output: html_document
+---
+
+**Background** 
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+**Data**
+
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+**Analysis**
+First, if necessary, download and load the data
+
+```{r, cache=TRUE, echo=TRUE}
+if (!file.exists("pml-testing.csv")) {
+  fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(fileURL, "./pml-testing.csv", method="curl")
+}
+
+if (!file.exists("pml-training.csv")) {
+  fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(fileURL, "./pml-training.csv", method="curl")
+}
+
+pml_testing <- read.csv("pml-testing.csv", na.strings = c("NA","#DIV/0!",""))
+pml_training <- read.csv("pml-training.csv", na.strings = c("NA","#DIV/0!",""))
+
+```
+
+In order to reduce the dimension of the data set, Delete all columns with NA values.
+Also, the first 7 columns should be deleted since they create errors while creating the prediction.
+
+```{r, cache=TRUE, echo=TRUE} 
+
+pml_training <- pml_training[,colSums(is.na(pml_training)) == 0]
+pml_testing <- pml_testing[,colSums(is.na(pml_testing)) == 0]
+
+pml_training   <-pml_training[,-c(1:7)]
+pml_testing <-pml_testing[,-c(1:7)]
+```
+
+Now the preprocessing is done, set the seed to make this analysis reproducible.
+
+```{r, echo=TRUE} 
+set.seed(1324)
+```
+
+Now, load the caret package, which is a set of functions that attempt to streamline the process for creating predictive models. Make the percentage of the data to be 90% training and divide the training set into subtraining set and subtesting set. 
+
+```{r, cache=TRUE, echo=TRUE} 
+library(caret)
+
+sample <- createDataPartition(pml_training$class,list=F,p=0.9)
+subtraining <- pml_training[sample,]
+subtesting <- pml_training[-sample,]
+```
+
+Load randomForest package, which contains the random forest algorithm based on Breiman and Cutler's original Fortran code for classification and regression. Then, apply random forest algorithm to the subtraining data and predict the outcome for subtesting set.
+
+```{r, cache=TRUE, echo=TRUE} 
+library(randomForest)
+
+training_rf <- randomForest(classe ~., data=subtraining, method="class")
+prediction <- predict(training_rf, subtesting, type = "class")
+```
+
+Show the result. Please note the very high accuracy.
+
+```{r, cache=TRUE, echo=TRUE} 
+confusionMatrix(prediction, subtesting$classe)
+```
+
+**Cross validation and error estimates**
+
+In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run, as follows:
+
+Each tree is constructed using a different bootstrap sample from the original data. About one-third of the cases are left out of the bootstrap sample and not used in the construction of the kth tree.
+
+Put each case left out in the construction of the kth tree down the kth tree to get a classification. In this way, a test set classification is obtained for each case in about one-third of the trees. At the end of the run, take j to be the class that got most of the votes every time case n was oob. The proportion of times that j is not equal to the true class of n averaged over all cases is the oob error estimate. This has proven to be unbiased in many tests. (Source: Leo Breiman and Adele Cutler).
+
